@@ -119,7 +119,7 @@ elevation = mosaic(srtm1, srtm2, fun=max)
 elevation = crop(elevation, extent(spTransform(study.extent.corners, crs(elevation)))*1.1)
 
 #------------------------------------5. GET WorldClim------------------------------------
-climate = getData('worldclim', var='bio', res=0.5, lat=ll[1], lon=ll[2])
+climate = getData('worldclim', var='bio', res=2.5, lat=ll[1], lon=ll[2])
 climate = crop(climate, extent(spTransform(study.extent.corners, crs(climate)))*1.1)
 
 #------------------------------------6. EXTRACT CropScape------------------------------------
@@ -171,3 +171,21 @@ p.nlcd = ex.mat %>%
   spread(class, pland)
 
 colnames(p.nlcd) = c("ID", paste0("nlcd", colnames(p.nlcd[,2:length(colnames(p.nlcd))])))
+
+#------------------------------------8. Extract Elevation------------------------------------
+
+#----Converting data to elevation crs----
+species.spatial.elevation = spTransform(species.spatial, crs(elevation))
+elevation.extVals = raster::extract(elevation, species.spatial.elevation)
+
+#------------------------------------9. Extract Climate------------------------------------
+
+#----Converting data to climate crs----
+species.spatial.climate = spTransform(species.spatial, crs(climate))
+climate.extVals = data.frame(raster::extract(climate, species.spatial.climate))
+
+#----Bringing everything together----
+species.df = as.data.frame(species.spatial@coords)
+colnames(species.df) = c("long", "lat")
+species.df = cbind(pa = species.spatial@data[,3], species.df, p.crops, p.nlcd, elevation.extVals, climate.extVals)
+species.df = species.df[!complete.cases(species.df),-c(4,39)]
