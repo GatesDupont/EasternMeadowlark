@@ -1,6 +1,5 @@
 # Gates Dupont                 #
 # Eastern Meadowlark           #
-# MassWildlife & Mass Audubon  #
 # March 2019                   #
 # # # # # # # # # # # # # # # #
 
@@ -54,7 +53,7 @@ gbif.pull = gbif("Sturnella", "magna", geo = TRUE, removeZeros = 0, ext = extent
 gbif = gbif.pull %>%
   filter(adm1 == "Massachusetts") %>%
   mutate(date = substr(eventDate,1,10)) %>%
-  filter(year > 2015) %>%
+  filter(year > 2014) %>%
   filter(month > 4 & month < 8) %>%
   select(lat=69, long=74, month=76, year=119) %>%
   filter(complete.cases(.)) %>%
@@ -260,6 +259,7 @@ par(mfrow=c(2,5))
 for(i in 1:10){
   varImpPlot(rf[[i]], type=2)
 }
+par(mfrow=c(1,1))
 
 #----Calculating AUC score for each model----
 rf.evals = vector("list", 10)
@@ -270,3 +270,4 @@ for(i in 1:10){
   rf.AUC.scores[i] = rf.evals[[i]]@auc
 }
 boxplot(rf.AUC.scores, ylim=c(0,1), main="Random Forest Model", ylab="AUC")
+
