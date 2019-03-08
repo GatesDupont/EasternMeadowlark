@@ -53,7 +53,7 @@ gbif.pull = gbif("Sturnella", "magna", geo = TRUE, removeZeros = 0, ext = extent
 gbif = gbif.pull %>%
   filter(adm1 == "Massachusetts") %>%
   mutate(date = substr(eventDate,1,10)) %>%
-  filter(year > 2014) %>%
+  filter(year > 2013) %>%
   filter(month > 4 & month < 8) %>%
   select(lat=69, long=74, month=76, year=119) %>%
   filter(complete.cases(.)) %>%
@@ -239,21 +239,11 @@ for(k in 1){
 }
 
 #------------------------------------11. Model------------------------------------
-#----Making 10 data sets----
-rf.df.pres = species.df[species.df$pa == 1,]
-rf.dfs = list()
-starts = seq(length(rf.df.pres$pa)+1,length(species.df$pa), by=length(rf.df.pres$pa))
-for(i in 1:10){
-  rf.dfs[[i]] =  data.frame(rbind(rf.df.pres, species.df[c(starts[i]:(starts[i]+length(rf.df.pres$pa))),]))
-  rf.dfs[[i]] = rf.dfs[[i]][1:(length(rf.dfs[[i]]$pa)-1),]
-} # last one in rf.dfs[[10]] is NA, just a simple counting problem.
 
-#----Loop to create training & testing sets----
-
-#----Running Random Forest models---- # Fix to run on training
+#----10 Random Forest models----
 rf = vector("list", 10)
 for(i in 1:10){
-  rf[[i]] = randomForest(pa ~ ., rf.train.dfs[[i]])
+  rf[[i]] = rf(pa ~ ., rf.train.dfs[[i]])
 }
 
 #----Plotting variable importance----
@@ -272,3 +262,4 @@ for(i in 1:10){
   rf.AUC.scores[i] = rf.evals[[i]]@auc
 }
 boxplot(rf.AUC.scores, ylim=c(0,1), main="Random Forest Model", ylab="AUC")
+
