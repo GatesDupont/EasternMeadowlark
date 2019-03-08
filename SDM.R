@@ -81,7 +81,9 @@ leaflet(pres) %>% addProviderTiles("Esri.WorldImagery", group = "ESRI") %>%
 
 #----*Pseudo-absence points----
 set.seed(1)
-bg = as.data.frame(spsample(st.contour,n=length(pres$lat)*10,"random"))
+#n.p.pts = round(0.7*(length(pres$lat))) # 70% training 30% testing
+#bg = as.data.frame(spsample(st.contour, n = n.p.pts*10 + length(pres$lat)-n.p.pts,"random"))
+bg = as.data.frame(spsample(st.contour, n = length(pres$lat)*13,"random"))
 colnames(bg) = c("long", "lat")
 coordinates(bg) = ~long+lat
 bg = data.frame(bg@coords)
@@ -95,7 +97,7 @@ species.spatial = SpatialPointsDataFrame(cbind(species$lon, species$lat), data=s
 
 #----*Pulling cropscape data----
 CropScape = getCDL("MA", 2017)
-crops = crop(crops.raw, extent(spTransform(study.extent.corners, crs(CropScape$MA2017)))*1.1)
+crops = crop(CropScape$MA2017, extent(spTransform(study.extent.corners, crs(CropScape$MA2017)))*1.1)
 
 #------------------------------------3. GET NLCD------------------------------------
 
@@ -188,4 +190,67 @@ climate.extVals = data.frame(raster::extract(climate, species.spatial.climate))
 species.df = as.data.frame(species.spatial@coords)
 colnames(species.df) = c("long", "lat")
 species.df = cbind(pa = species.spatial@data[,3], species.df, p.crops, p.nlcd, elevation.extVals, climate.extVals)
-species.df = species.df[!complete.cases(species.df),-c(4,39)]
+species.df = species.df[complete.cases(species.df),-c(4,39)]
+
+#------------------------------------10. Training and Testing------------------------------------
+
+#----Presence Data----
+pres = species.df[species.df$pa==1,] # Subsetting for presence data
+n.pres = length(pres[,1]) # Number of pres points
+n.pres.train = round(length(pres[,1])*0.7) # Number of pres points for training
+n.pres.test = n.pres - n.pres.train # Number of pres points for tetsing
+
+# Split up pres for train and test
+train.pres = pres[1:n.pres.train,]
+test.pres = pres[(n.pres.train+1):(n.pres.train+n.pres.test),]
+
+# Checking the spatial distribution of pres
+plot(st.contour)
+points(lat~long, data=train.pres, col="blue", pch=20)
+points(lat~long, data=test.pres, col="red", pch=20)
+
+#----Absence Data----
+abs = species.df[species.df$pa==0,] # Absence data
+n.abs = length(abs[,1]) # Number of absence points
+n.rows.samp = 1:n.abs # Vector for sampling absence data
+
+#----Looping to create 10 datasets----
+for(k in 1){
+  n.rows.samp = 1:n.abs # Vector for sampling absence data
+  
+  # Train Datasets
+  rf.train.dfs = vector("list", 10)
+  for(i in 1:10){
+    j = sample(n.rows.samp, n.pres.train, replace = F)
+    abs.samp = abs[j,]
+    rf.train.dfs[[i]] = rbind(train.pres, abs.samp)
+    n.rows.samp = n.rows.samp[!n.rows.samp %in% j]
+  }
+  
+  # Test Datasets
+  rf.test.dfs = vector("list", 10)
+  for(i in 1:10){
+    j = sample(n.rows.samp, n.pres.test, replace = F)
+    abs.samp = abs[j,]
+    rf.test.dfs[[i]] = rbind(test.pres, abs.samp)
+    n.rows.samp = n.rows.samp[!n.rows.samp %in% j]
+  }
+}
+
+#------------------------------------11. Model------------------------------------
+#----Making 10 data sets----
+rf.df.pres = species.df[species.df$pa == 1,]
+rf.dfs = list()
+starts = seq(length(rf.df.pres$pa)+1,length(species.df$pa), by=length(rf.df.pres$pa))
+for(i in 1:10){
+  rf.dfs[[i]] =  data.frame(rbind(rf.df.pres, species.df[c(starts[i]:(starts[i]+length(rf.df.pres$pa))),]))
+  rf.dfs[[i]] = rf.dfs[[i]][1:(length(rf.dfs[[i]]$pa)-1),]
+} # last one in rf.dfs[[10]] is NA, just a simple counting problem.
+
+#----Loop to create training & testing sets----
+
+#----Running Random Forest models---- # Fix to run on training
+rf = vector("list", 10)
+for(i in 1:10){
+  rf[[i]] = randomForest(pa ~ ., rf.train.dfs[[i]])
+}
