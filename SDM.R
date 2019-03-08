@@ -254,3 +254,19 @@ rf = vector("list", 10)
 for(i in 1:10){
   rf[[i]] = randomForest(pa ~ ., rf.train.dfs[[i]])
 }
+
+#----Plotting variable importance----
+par(mfrow=c(2,5))
+for(i in 1:10){
+  varImpPlot(rf[[i]], type=2)
+}
+
+#----Calculating AUC score for each model----
+rf.evals = vector("list", 10)
+rf.AUC.scores = vector("numeric", 10)
+for(i in 1:10){
+  test.df = rf.test.dfs[[i]]
+  rf.evals[[i]] = evaluate(test.df[test.df$pa==1,], test.df[test.df$pa==0,], rf[[i]])
+  rf.AUC.scores[i] = rf.evals[[i]]@auc
+}
+boxplot(rf.AUC.scores, ylim=c(0,1), main="Random Forest Model", ylab="AUC")
