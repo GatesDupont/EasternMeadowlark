@@ -53,7 +53,7 @@ gbif.pull = gbif("Sturnella", "magna", geo = TRUE, removeZeros = 0, ext = extent
 gbif = gbif.pull %>%
   filter(adm1 == "Massachusetts") %>%
   mutate(date = substr(eventDate,1,10)) %>%
-  filter(year > 2013) %>%
+  filter(year > 2015) %>%
   filter(month > 4 & month < 8) %>%
   select(lat=69, long=74, month=76, year=119) %>%
   filter(complete.cases(.)) %>%
@@ -243,7 +243,7 @@ for(k in 1){
 #----10 Random Forest models----
 rf = vector("list", 10)
 for(i in 1:10){
-  rf[[i]] = rf(pa ~ ., rf.train.dfs[[i]])
+  rf[[i]] = randomForest(pa ~ ., rf.train.dfs[[i]])
 }
 
 #----Plotting variable importance----
@@ -258,7 +258,7 @@ rf.evals = vector("list", 10)
 rf.AUC.scores = vector("numeric", 10)
 for(i in 1:10){
   test.df = rf.test.dfs[[i]]
-  rf.evals[[i]] = evaluate(test.df[test.df$pa==1,], test.df[test.df$pa==0,], rf[[i]])
+  rf.evals[[i]] = dismo::evaluate(test.df[test.df$pa==1,], test.df[test.df$pa==0,], rf[[i]])
   rf.AUC.scores[i] = rf.evals[[i]]@auc
 }
 boxplot(rf.AUC.scores, ylim=c(0,1), main="Random Forest Model", ylab="AUC")
