@@ -147,6 +147,7 @@ p.crops = ex.mat %>%
   spread(class, pland)
 
 colnames(p.crops) = c("ID", paste0("cdl", colnames(p.crops[,2:length(colnames(p.crops))])))
+p.crops = p.crops[,-1]
 
 #------------------------------------7. EXTRACT nlcd------------------------------------
 
@@ -172,6 +173,7 @@ p.nlcd = ex.mat %>%
   spread(class, pland)
 
 colnames(p.nlcd) = c("ID", paste0("nlcd", colnames(p.nlcd[,2:length(colnames(p.nlcd))])))
+p.nlcd = p.nlcd[,-1]
 
 #------------------------------------8. Extract Elevation------------------------------------
 
@@ -189,7 +191,7 @@ climate.extVals = data.frame(raster::extract(climate, species.spatial.climate))
 species.df = as.data.frame(species.spatial@coords)
 colnames(species.df) = c("long", "lat")
 species.df = cbind(pa = species.spatial@data[,3], species.df, p.crops, p.nlcd, elevation.extVals, climate.extVals)
-species.df = species.df[complete.cases(species.df),-c(4,39)]
+species.df = species.df[complete.cases(species.df),]
 
 #------------------------------------10. Training and Testing------------------------------------
 
@@ -270,4 +272,3 @@ for(i in 1:10){
   rf.AUC.scores[i] = rf.evals[[i]]@auc
 }
 boxplot(rf.AUC.scores, ylim=c(0,1), main="Random Forest Model", ylab="AUC")
-
