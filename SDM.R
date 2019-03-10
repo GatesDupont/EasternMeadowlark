@@ -263,3 +263,112 @@ for(i in 1:10){
 }
 boxplot(rf.AUC.scores, ylim=c(0,1), main="Random Forest Model", ylab="AUC")
 
+#------------------------------------11. Grid Coordinates------------------------------------
+
+#----Generating prediction grid----
+states <- ne_states(iso_a2 = "US", returnclass = "sf") %>% 
+  filter(iso_3166_2 == "US-MA") %>% 
+  st_transform(crs = projection(crops))
+
+buffer_size = 350
+r_grid = raster(crops)
+res(r_grid) = buffer_size
+pt_grid = rasterToPoints(r_grid, spatial = TRUE)
+# subset to those within texas
+grid = pt_grid[states %>% as("Spatial"), ]
+
+#------------------------------------12. Grid CropScape------------------------------------
+
+#----Converting data to CropScape crs----
+species.spatial.crops = spTransform(grid, crs(crops))
+
+#----Extracting CropScape values----
+crops.vx = velox(stack(crops))
+spol = gBuffer(species.spatial.crops, width=350, byid=TRUE)
+spdf = SpatialPolygonsDataFrame(spol, data.frame(id=1:length(spol)), FALSE)
+ex.mat = crops.vx$extract(spdf, df=T)
+ex.mat$ID_sp = as.numeric(ex.mat$ID_sp)
+
+#----Calculating proportional land cover----
+p.crops = ex.mat %>%
+  setNames(c("ID", "class")) %>%
+  group_by(ID, class) %>%
+  summarise(n = n()) %>%
+  mutate(pland = n / sum(n)) %>%
+  ungroup() %>%
+  select(ID, class, pland) %>%
+  tidyr::complete(ID, nesting(class), fill = list(pland = 0)) %>% # Fill in implicit landcover 0s
+  spread(class, pland)
+
+colnames(p.crops) = c("ID", paste0("cdl", colnames(p.crops[,2:length(colnames(p.crops))])))
+p.crops = p.crops[,-1]
+
+#------------------------------------13. Grid NLCD------------------------------------
+
+#----Converting data to nlcd crs----
+species.spatial.nlcd = spTransform(grid, crs(nlcd))
+
+#----Extracting NLCD values----
+nlcd.vx = velox(stack(nlcd))
+spol = gBuffer(species.spatial.nlcd, width=350, byid=TRUE)
+spdf = SpatialPolygonsDataFrame(spol, data.frame(id=1:length(spol)), FALSE)
+ex.mat = nlcd.vx$extract(spdf, df=T)
+ex.mat$ID_sp = as.numeric(ex.mat$ID_sp)
+
+#----Calculating proportional land cover----
+p.nlcd = ex.mat %>%
+  setNames(c("ID", "class")) %>%
+  group_by(ID, class) %>%
+  summarise(n = n()) %>%
+  mutate(pland = n / sum(n)) %>%
+  ungroup() %>%
+  select(ID, class, pland) %>%
+  tidyr::complete(ID, nesting(class), fill = list(pland = 0)) %>% # Fill in implicit landcover 0s
+  spread(class, pland)
+
+colnames(p.nlcd) = c("ID", paste0("nlcd", colnames(p.nlcd[,2:length(colnames(p.nlcd))])))
+p.nlcd = p.nlcd[,-1]
+
+#------------------------------------14. Grid Elevation------------------------------------
+
+species.spatial.elevation = spTransform(grid, crs(elevation))
+elevation.extVals = raster::extract(elevation, species.spatial.elevation)
+
+#------------------------------------15. Grid Climate------------------------------------
+
+#----Converting data to climate crs----
+species.spatial.climate = spTransform(grid, crs(climate))
+climate.extVals = data.frame(raster::extract(climate, species.spatial.climate))
+
+#------------------------------------16. Combining data------------------------------------
+pred.df = as.data.frame(grid@coords)
+colnames(pred.df) = c("long", "lat")
+pred.df = cbind(pred.df, p.crops, p.nlcd, elevation.extVals, climate.extVals)
+pred.df = pred.df[complete.cases(pred.df), ]
+#pred.df$cdl5 = 0
+
+#------------------------------------17. Model Predictions------------------------------------
+
+#----Model-averaged predictions----
+rf.p = data.frame(predict(rf[[1]], pred.df))
+for(i in 2:10){
+  rf.p=cbind(rf.p, predict(rf[[i]], pred.df))
+}
+rf.avg = rowMeans(rf.p)
+
+#rf.predictions = predict(rf[[1]], pred.df)
+predictions = pred.df[,c("long", "lat")]
+predictions$rf = rf.avg
+
+#------------------------------------18. Plotting------------------------------------
+
+#----Creating the raster----
+SDM.raster = rasterFromXYZ(predictions)
+crs(SDM.raster) = crs(grid)
+
+#----Basic plot----
+plot(rasterFromXYZ(predictions), main = "Species Distribution Model",
+     col=colorRampPalette(c("darkgreen", "yellow", "red"))(100), zlim=c(0,1))
+
+plot(rasterFromXYZ(predictions), main = "Species Distribution Model",
+     col=plasma(100), zlim=c(0,1))
